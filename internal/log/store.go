@@ -32,7 +32,7 @@ func newStore(f *os.File) (*store, error) {
 		File: f,
 		size: size,
 		buf:  bufio.NewWriter(f),
-	}
+	}, nil
 }
 
 func (s *store) Append(p []byte) (n uint64, pos uint64, err error) {
