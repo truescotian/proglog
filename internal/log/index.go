@@ -8,11 +8,16 @@ import (
 )
 
 var (
+	// define the number of bytes that make up each index entry.
+	// 1. a record's offset
+	// 2. its position in the store file
 	offWidth uint64 = 4
 	posWidth uint64 = 8
-	entWidth        = offWidth + posWidth // this is the entry width
+	entWidth        = offWidth + posWidth // entry width
 )
 
+// index struct is an abstraction for the index file (physical)
+// which comprises a persisted file and a memory-mapped file
 type index struct {
 	file *os.File
 	mmap gommap.MMap
@@ -23,10 +28,12 @@ func newIndex(f *os.File, c Config) (*index, error) {
 	idx := &index{
 		file: f,
 	}
+
 	fi, err := os.Stat(f.Name())
 	if err != nil {
 		return nil, err
 	}
+
 	idx.size = uint64(fi.Size())
 
 	// grow the file to the max index size before
@@ -53,21 +60,24 @@ func (i *index) Read(in int64) (out uint32, pos uint64, err error) {
 	if i.size == 0 {
 		return 0, 0, io.EOF
 	}
+
 	if in == -1 {
 		out = uint32((i.size / entWidth) - 1)
 	} else {
 		out = uint32(in)
 	}
+
 	pos = uint64(out) * entWidth
 	if i.size < pos+entWidth {
 		return 0, 0, io.EOF
 	}
+
 	out = enc.Uint32(i.mmap[pos : pos+offWidth])
 	pos = enc.Uint64(i.mmap[pos+offWidth : pos+entWidth])
 	return out, pos, nil
 }
 
-// Write appens the given offset and position to the index.
+// Write appends the given offset and position to the index.
 func (i *index) Write(off uint32, pos uint64) error {
 	// validate that we have enough space to write the entry (entWidth)
 	// by checking if the mmap has space i.size + entWidth
@@ -81,7 +91,7 @@ func (i *index) Write(off uint32, pos uint64) error {
 	enc.PutUint64(i.mmap[i.size+offWidth:i.size+entWidth], pos)
 
 	// increment the position of where the next write will go.
-	i.size = uint64(entWidth)
+	i.size += uint64(entWidth)
 	return nil
 }
 
