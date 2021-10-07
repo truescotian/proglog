@@ -1,7 +1,9 @@
 package log
 
 import (
+	"fmt"
 	"io/ioutil"
+	"os"
 	"path"
 	"sort"
 	"strconv"
@@ -88,4 +90,71 @@ func (l *Log) Append(record *api.Record) (uint64, error) {
 		err = l.newSegment(off + 1)
 	}
 	return off, err
+}
+
+// Read reads the record stored at the given offset.
+func (l *Log) Read(off uint64) (*api.Record, error) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	var s *segment
+
+	// segments are in order from oldest to newest and the segment's
+	// base offset is the smallest offset in the segment, we iterate
+	// over the segments until we find the first segment whose base offset is less
+	// than or equal to the offset we're looking for.
+	for _, segment := range l.segments {
+		if segment.baseOffset <= off && off < segment.nextOffset {
+			s = segment
+			break
+		}
+	}
+
+	if s == nil || s.nextOffset <= off {
+		return nil, fmt.Errorf("offset out of range: %d", off)
+	}
+
+	return s.Read(off)
+}
+
+// Close iterates over the segments and closes them
+func (l *Log) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, segment := range l.segments {
+		if err := segment.Close(); err != nil {
+			return err
+		}
+	}
+}
+
+// Remoe closes the log and then removes its data
+func (l *Log) Remove() error {
+	if err := l.Close(); err != nil {
+		return err
+	}
+	return os.RemoveAll(l.Dir)
+}
+
+// Reset removes the logs and then creates a new log to replace it
+func (l *Log) Reset() error {
+	if err := l.Remove(); err != nil {
+		return err
+	}
+	return l.setup()
+}
+
+func (l *Log) LowestOffset() (uint64, error) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.segments[0].baseOffset, nil
+}
+
+func (l *Log) HighestOffset() (uint64, error) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	off := l.segments[len(l.segments)-1].nextOffset
+	if off == 0 {
+		return 0, nil
+	}
+	return off - 1, nil
 }
