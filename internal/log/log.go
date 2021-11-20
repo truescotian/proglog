@@ -2,6 +2,7 @@ package log
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -125,6 +126,8 @@ func (l *Log) Close() error {
 			return err
 		}
 	}
+
+	return nil
 }
 
 // Remoe closes the log and then removes its data
@@ -157,4 +160,69 @@ func (l *Log) HighestOffset() (uint64, error) {
 		return 0, nil
 	}
 	return off - 1, nil
+}
+
+// Truncate removes all segments whose highest offset is lower than the lowest.
+func (l *Log) Truncate(lowest uint64) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var segments []*segment
+
+	for _, s := range l.segments {
+		if s.nextOffset <= lowest+1 {
+			if err := s.Remove(); err != nil {
+				return err
+			}
+			continue
+		}
+		segments = append(segments, s)
+	}
+
+	l.segments = segments
+	return nil
+}
+
+// Reader returns io.Reader to read the whole log. This is needed
+// when coordinating consensus and need to support snapshots
+// and restoring a log. Reader uses an io.MultiReader() to concat
+// the segments' stores.
+//
+// The segment stores are wrapped by the originReader type for two
+// reasons.
+// 1. Satisfy the io.Reader interface so we can pass into the io.MultiReader.
+// 2. Ensure we begin reading from the origin of the store and read its
+// entire file.
+func (l *Log) Reader() io.Reader {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	readers := make([]io.Reader, len(l.segments))
+	for i, segment := range l.segments {
+		readers[i] = &originReader{segment.store, 0}
+	}
+	return io.MultiReader(readers...)
+}
+
+type originReader struct {
+	*store
+	off int64
+}
+
+func (o *originReader) Read(p []byte) (int, error) {
+	n, err := o.ReadAt(p, o.off)
+	o.off += int64(n)
+	return n, err
+}
+
+// newSegmentcreates a new segment, appends that segment to the
+// log's slice of segments, and makes the new segment the active
+// segment so that subsequent append calls write to it.
+func (l *Log) newSegment(off uint64) error {
+	s, err := newSegment(l.Dir, off, l.Config)
+	if err != nil {
+		return err
+	}
+	l.segments = append(l.segments, s)
+	l.activeSegment = s
+	return nil
 }
