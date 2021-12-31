@@ -11,9 +11,9 @@ message Record {
 
 service Log {
 	rpc Produce(ProduceRequest) returns (ProduceResponse) {}
-	rpc Consume(ConsumeRequest) returns (ConsumeRequest) {}
+	rpc Consume(ConsumeRequest) returns (ConsumeResponse) {}
 	rpc ConsumeStream(ConsumeRequest) returns (stream ConsumeResponse) {}
-	rpc ProduceStream(stream ProduceRequest) returns (stream ProduceRequest) {}
+	rpc ProduceStream(stream ProduceRequest) returns (stream ProduceResponse) {}
 }
 
 message ProduceRequest {
