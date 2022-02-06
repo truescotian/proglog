@@ -13,6 +13,8 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+
+	api "github.com/truescotian/proglog/api/v1"
 )
 
 // Agent runs on every service instance, setting up and connecting
