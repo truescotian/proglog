@@ -64,9 +64,14 @@ func NewGRPCServer(config *Config, opts ...grpc.ServerOption) (
 	// we're developing our service and we want all of our
 	// requests to be traced.
 	// NOTE: in production might not want to trace every request
-	// due to performance. You can change this to the probability
-	// sampler and sample a percentage of the requests, but you may
-	// miss important requests.
+	// due to performance, or trace confidential data. You can change 
+	// this to the probability sampler and sample a percentage of 
+	// the requests, but you may miss important requests.
+	//
+	// we could reconcile these trade-offs by writing our own 
+	// sampler that always traces important requests and samples
+	// a percentage of the rest of requests. Code example is on
+	// page 106.
 	trace.ApplyConfig(trace.Config{DefaultSampler: trace.AlwaysSample()})
 
 	// view specifies what stats OpenCensus will collect. The default
